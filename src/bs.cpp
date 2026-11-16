@@ -1,5 +1,5 @@
-#include "bs.hpp";
-#include <cmath>;
+#include "bs.hpp"
+#include <cmath>
 
 double norm_cdf(double x){
     return 0.5 * std::erfc(-x / std::sqrt(2.0));
