@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <chrono>
 #include "bs.hpp"
 #include "mc.hpp"
 
@@ -25,4 +26,13 @@ int main(){
                   << std::setw(10) << b.price << std::setw(10) << b.se << "\n";
     }
     std::cout << "BS call: " << bs_call << "\n";
+
+    const std::size_t n_bench = 10'000'000;
+
+    auto t0 = std::chrono::steady_clock::now();
+    MCResult r = mc_european(p, OptionType::Call, n_bench);
+    auto t1 = std::chrono::steady_clock::now();
+
+    double sec = std::chrono::duration<double>(t1-t0).count();
+    std::cout << "\n" << n_bench << " paths in " << sec << " s (" << n_bench / sec / 1e6 << " M paths/s), price = " << r.price << "\n";
 }
