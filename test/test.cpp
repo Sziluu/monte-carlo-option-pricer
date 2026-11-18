@@ -41,6 +41,27 @@ int main(){
     const double ratio = large.se / small.se;
     check(ratio > 0.45 && ratio < 0.55, "SE halves when N quadruples");
 
+     // --- Asian option ---
+    const std::size_t steps = 252;
+    const MCResult asian_call = mc_asian(p, OptionType::Call, 200'000, steps);
+    const MCResult asian_put  = mc_asian(p, OptionType::Put,  200'000, steps);
+    const MCResult asian_anti = mc_asian(p, OptionType::Call, 200'000, steps, true);
+
+    check(asian_call.price < mc_call.price, "Asian call cheaper than European call");
+
+    // Asian put-call parity: C - P = e^{-rT} (E[A] - K),  E[A] = S0/m * sum_k e^{r t_k}
+    const double dt = p.T / static_cast<double>(steps);
+    double expected_avg = 0.0;
+    for (std::size_t k = 1; k <= steps; ++k)
+        expected_avg += p.S0 * std::exp(p.r * dt * static_cast<double>(k));
+    expected_avg /= static_cast<double>(steps);
+    const double parity = std::exp(-p.r * p.T) * (expected_avg - p.K);
+    check(std::abs((asian_call.price - asian_put.price) - parity)
+              < 3 * (asian_call.se + asian_put.se),
+          "Asian put-call parity");
+
+    check(asian_anti.se < asian_call.se, "antithetic reduces SE for Asian call");
+
     // --- input validation ---
     bool threw = false;
     try {

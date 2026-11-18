@@ -1,12 +1,15 @@
 # Monte Carlo Option Pricer (C++17)
 
-Monte Carlo pricer for European options under geometric Brownian motion,
-with standard errors, 95% confidence intervals and antithetic variates,
-validated against the Black–Scholes closed form.
+Monte Carlo pricer for European and arithmetic-average Asian options under
+geometric Brownian motion, with standard errors, 95% confidence intervals and
+antithetic variates. The European pricer is validated against the Black–Scholes
+closed form; the Asian option, which has no closed-form price, shows where
+Monte Carlo is actually needed.
 
 ## Features
 - Black–Scholes closed-form benchmark (call and put)
 - Monte Carlo pricing with standard error and 95% confidence interval
+- Arithmetic-average Asian options (discretely monitored, path simulation)
 - Antithetic variates variance reduction (standard error computed from independent pair averages)
 - Numerically stable one-pass mean/variance (Welford's algorithm)
 - Reproducible results via fixed RNG seed
@@ -24,6 +27,11 @@ The Monte Carlo estimate is the sample mean of discounted payoffs. Its standard
 error is `s / √m`, where `s` is the sample standard deviation and `m` is the number
 of independent samples. With antithetic variates each pair `(Z, −Z)` is averaged
 into one sample, so `m = n / 2` for `n` payoff evaluations.
+
+Asian options are priced on simulated paths with `steps` equally spaced monitoring
+dates `t_k = k·T/steps`, using the exact GBM step
+`S_{k+1} = S_k · exp((r − σ²/2)·Δt + σ·√Δt·Z_k)`, and payoff `max(A − K, 0)`
+where `A` is the arithmetic average of `S_{t_1}, …, S_{t_steps}`.
 
 ## Build and run
 
@@ -49,6 +57,12 @@ cd build-release
 ctest --output-on-failure
 ```
 
+Convergence plot (requires Python with matplotlib; `mc_pricer` writes
+`convergence.csv` to the working directory):
+```
+python scripts/plot.py convergence.csv docs/convergence.png
+```
+
 ## Results
 
 Parameters: S0 = 100, K = 100, r = 5%, σ = 20%, T = 1 year, seed = 42.
@@ -69,6 +83,18 @@ European call, `n` = number of payoff evaluations:
 - All estimates lie within 2 standard errors of the Black–Scholes price.
 - Rows share the same seed, so smaller runs are prefixes of larger ones and their errors are correlated.
 
+![Convergence](docs/convergence.png)
+
+Arithmetic-average Asian call, 252 monitoring dates (daily), 100,000 paths:
+
+|            | Price  |     SE | 95% CI           |
+|------------|-------:|-------:|------------------|
+| plain      | 5.7525 | 0.0252 | [5.7030, 5.8020] |
+| antithetic | 5.7689 | 0.0175 | [5.7345, 5.8032] |
+
+The Asian call is cheaper than the European call (10.4506) because averaging
+reduces the effective volatility of the underlying.
+
 Throughput: ~17–19 M paths/s, single-threaded (10^7 paths in ~0.55 s; GCC 13.2, -O3, Intel Core i5-12450H).
 
 ## Validation
@@ -78,14 +104,19 @@ The test suite checks:
 - Monte Carlo call and put prices within 3 standard errors of Black–Scholes (plain and antithetic)
 - antithetic variates give a lower standard error than plain sampling at equal `n`
 - standard error halves when `n` quadruples
-- invalid input (fewer than 2 samples) is rejected
+- Asian call is cheaper than the European call
+- Asian put–call parity: C − P = e^(−rT)·(E[A] − K), with E[A] = (S0/steps)·Σ e^(r·t_k)
+- antithetic variates reduce the standard error for the Asian call
+- invalid input (fewer than 2 samples, zero monitoring steps) is rejected
 
 ## Project structure
 ```
 include/   bs.hpp, mc.hpp     public interfaces
 src/       bs.cpp, mc.cpp     Black–Scholes and Monte Carlo implementations
-           main.cpp           comparison table and throughput benchmark
+           main.cpp           comparison tables, convergence data, throughput benchmark
 test/      test.cpp           unit tests
+scripts/   plot.py            convergence plot
+docs/      convergence.png    figure used in this README
 ```
 
 ## Limitations
@@ -94,7 +125,6 @@ test/      test.cpp           unit tests
   slightly between compilers; tests therefore compare within statistical tolerance.
 
 ## Future work
-- Asian (arithmetic average) options with path simulation
 - Greeks (pathwise and likelihood-ratio estimators)
 - Control variates
 - Multithreading (OpenMP with independent per-thread RNG streams)
